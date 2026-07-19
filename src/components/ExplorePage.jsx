@@ -200,7 +200,7 @@ function CountryShowcaseSection({ country, style, showcaseRef }) {
 
   // Compact photo stack helper for row integration
   const renderCompactPhotos = (photos) => {
-    if (!photos || photos.length === 0) return null;
+    if (!photos || !Array.isArray(photos) || photos.length === 0) return null;
     return (
       <div style={{
         position: 'relative',
@@ -741,7 +741,7 @@ function PlotSnapSection({ plot, country, style, onSelectPlot }) {
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px' }}>
                 <span style={{ fontSize: '0.85rem', color: '#1A3E26', fontWeight: 500 }}>USD</span>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: '#1A3E26', lineHeight: 1 }}>
-                  ${plot.price.toLocaleString()}
+                  ${(plot.price || 0).toLocaleString()}
                 </span>
                 <span style={{ fontSize: '0.65rem', color: '#64748B', fontStyle: 'italic', marginLeft: '6px' }}>
                   * Escrow Secured
@@ -1198,7 +1198,7 @@ ${inquiryForm.fullName}`;
           {/* Normal Document Flow Targets for native scrolling & snap positions (opacity: 0, no visibility hidden) */}
           <div style={{ width: '100%', position: 'relative', zIndex: 1 }}>
             <div id="hero-sec" className="hero-viewport scroll-snap-target" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
-            {(Array.isArray(countriesData) ? countriesData : []).map((c) => (
+            {(Array.isArray(countriesData) ? countriesData : []).map((c) => c && (
               <div key={c.id} id={`${c.id}-sec`} className="deck-section scroll-snap-target" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
             ))}
             {/* Footer snap placeholder target */}
@@ -1292,7 +1292,7 @@ ${inquiryForm.fullName}`;
                 </span>
                 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                  {(Array.isArray(countriesData) ? countriesData : []).map((c, idx) => (
+                  {(Array.isArray(countriesData) ? countriesData : []).map((c, idx) => c && (
                     <button
                       key={c.id}
                       onClick={() => {
@@ -1371,7 +1371,7 @@ ${inquiryForm.fullName}`;
           </div>
 
           {/* Snapped countries list (Simple: Desc on left, small video next to it on right - STATIONARY FADING) */}
-          {(Array.isArray(countriesData) ? countriesData : []).map((c, index) => (
+          {(Array.isArray(countriesData) ? countriesData : []).map((c, index) => c && (
             <CountrySnapSection
               key={c.id}
               country={c}
@@ -1389,7 +1389,7 @@ ${inquiryForm.fullName}`;
           <div style={{ width: '100%', position: 'relative', zIndex: 1 }}>
             {/* Country Showcase target */}
             <div id="showcase-sec" className="plot-snap-target deck-section" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
-            {plots.map((p) => (
+            {plots.map((p) => p && (
               <div key={p.id} id={`${p.id}-sec`} className="plot-snap-target deck-section" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
             ))}
             {/* Footer snap placeholder target for plots */}
@@ -1460,7 +1460,7 @@ ${inquiryForm.fullName}`;
               />
               
               {/* Plots starting at index 1 */}
-              {plots.map((p, index) => (
+              {plots.map((p, index) => p && (
                 <PlotSnapSection
                   key={p.id}
                   plot={p}

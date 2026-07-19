@@ -17,7 +17,8 @@ import {
   CheckCircle,
   HelpCircle,
   PlusCircle,
-  Building
+  Building,
+  Globe
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import './LandownerPortal.css';
@@ -109,7 +110,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
   
   // Customizer view: 'edit' (Edit Existing Plot) vs 'add' (Add New Plot)
   const [customizerMode, setCustomizerMode] = useState('edit'); 
-  const [selectedAddCountryId, setSelectedAddCountryId] = useState('kenya');
+  const [selectedAddCountryId, setSelectedAddCountryId] = useState('');
 
   // Customizer Edit/Add Form State
   const [selectedPlotId, setSelectedPlotId] = useState('');
@@ -123,6 +124,47 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     photo2Url: '',
     photo2Caption: ''
   });
+
+  // Admin Country Customization State
+  const [selectedAdminCountryId, setSelectedAdminCountryId] = useState('');
+  const [adminCountryForm, setAdminCountryForm] = useState({
+    motto: '',
+    desc: '',
+    videoUrl: '',
+    accent: '#1A3E26',
+    highlights: '',
+    whyLive: '',
+    bestBuild: '',
+    culture: '',
+    potentialNeighborhoods: [],
+    culturePhotos: []
+  });
+
+  // Populate admin country form when selectedAdminCountryId or countriesData changes
+  useEffect(() => {
+    if (currentUser?.role === 'admin' && Array.isArray(countriesData) && countriesData.length > 0) {
+      const activeId = selectedAdminCountryId || countriesData[0].id;
+      if (!selectedAdminCountryId) {
+        setSelectedAdminCountryId(activeId);
+      }
+      const countryObj = countriesData.find(c => c.id === activeId);
+      if (countryObj) {
+        const cult = countryObj.cultureInfo || {};
+        setAdminCountryForm({
+          motto: countryObj.motto || '',
+          desc: countryObj.desc || '',
+          videoUrl: countryObj.videoUrl || '',
+          accent: countryObj.accent || '#1A3E26',
+          highlights: Array.isArray(countryObj.highlights) ? countryObj.highlights.join(', ') : '',
+          whyLive: cult.whyLive || '',
+          bestBuild: cult.bestBuild || '',
+          culture: cult.culture || '',
+          potentialNeighborhoods: countryObj.potentialNeighborhoods || [],
+          culturePhotos: cult.culturePhotos || []
+        });
+      }
+    }
+  }, [selectedAdminCountryId, countriesData, currentUser]);
   
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -293,20 +335,21 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
 
       } else {
         // Add New Plot Mode
+        if (!selectedAddCountryId || !selectedAddCountryId.trim()) {
+          alert("Please enter a country name for this listing.");
+          return;
+        }
+
         const newPlot = await apiService.addPlot({
           ...plotData,
-          country_id: selectedAddCountryId
+          country_id: selectedAddCountryId.trim()
         }, currentUser);
 
-        setCountriesData(prevData => prevData.map(country => {
-          if (country.id === selectedAddCountryId) {
-            return {
-              ...country,
-              plots: [...(country.plots || []), newPlot]
-            };
-          }
-          return country;
-        }));
+        // Re-fetch the catalog from the backend so that any dynamically created countries sync instantly
+        const freshCountries = await apiService.getCountries();
+        if (Array.isArray(freshCountries)) {
+          setCountriesData(freshCountries);
+        }
 
         setSaveSuccess(true);
         
@@ -315,11 +358,63 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
           setSelectedPlotId(newPlot.id);
           setCustomizerMode('edit');
           setSaveSuccess(false);
+          setSelectedAddCountryId('');
         }, 1500);
       }
     } catch (err) {
       console.error("Save failed", err);
       alert("Failed to save changes. Please try again.");
+    }
+  };
+
+  // Admin Country Metadata Customization Handler
+  const handleSaveCountrySpecs = async (e) => {
+    e.preventDefault();
+    if (!selectedAdminCountryId) {
+      alert("Please select a country to update.");
+      return;
+    }
+
+    try {
+      const formattedHighlights = adminCountryForm.highlights
+        .split(',')
+        .map(h => h.trim())
+        .filter(Boolean);
+
+      const countryData = {
+        motto: adminCountryForm.motto,
+        desc: adminCountryForm.desc,
+        videoUrl: adminCountryForm.videoUrl,
+        accent: adminCountryForm.accent,
+        highlights: formattedHighlights,
+        potentialNeighborhoods: adminCountryForm.potentialNeighborhoods,
+        cultureInfo: {
+          whyLive: adminCountryForm.whyLive,
+          bestBuild: adminCountryForm.bestBuild,
+          culture: adminCountryForm.culture,
+          culturePhotos: adminCountryForm.culturePhotos
+        }
+      };
+
+      const updatedCountry = await apiService.updateCountry(selectedAdminCountryId, countryData, currentUser);
+      
+      // Sync local state
+      setCountriesData(prevData => prevData.map(c => {
+        if (c.id === selectedAdminCountryId) {
+          return {
+            ...c,
+            ...updatedCountry
+          };
+        }
+        return c;
+      }));
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      alert("Country specifications updated successfully!");
+    } catch (err) {
+      console.error("Failed to save country specs", err);
+      alert("Failed to update country specifications.");
     }
   };
 
@@ -435,6 +530,17 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
             <Users size={16} />
             <span>My Inquiries ({dashboardStats.totalInquiries})</span>
           </button>
+
+          {currentUser.role === 'admin' && (
+            <button 
+              onClick={() => setActivePortalTab('countries')}
+              className={`portal-sidebar-item ${activePortalTab === 'countries' ? 'active' : ''}`}
+              style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
+            >
+              <Globe size={16} />
+              <span>Manage Country Pages</span>
+            </button>
+          )}
         </nav>
 
         <div className="portal-sidebar-footer">
@@ -759,17 +865,14 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                   ) : (
                     <div>
                       <label className="portal-input-label">Target Listing Country</label>
-                      <select
+                      <input
+                        type="text"
                         value={selectedAddCountryId}
                         onChange={(e) => setSelectedAddCountryId(e.target.value)}
-                        className="portal-select"
-                      >
-                        {(Array.isArray(countriesData) ? countriesData : []).map(country => (
-                          <option key={country.id} value={country.id}>
-                            {country.name} ({country.motto})
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="Type country name, e.g. Kenya, Uganda, Ghana..."
+                        className="portal-input"
+                        required
+                      />
                     </div>
                   )}
 
@@ -1135,6 +1238,162 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* 4. TAB: ADMIN COUNTRY PAGE CUSTOMIZATION MANAGER */}
+        {activePortalTab === 'countries' && currentUser.role === 'admin' && (
+          <div>
+            <div className="portal-section-header">
+              <div>
+                <p style={{ color: 'var(--accent-gold)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>System Management</p>
+                <h1 className="portal-section-title">Manage & Customize Country Pages</h1>
+              </div>
+            </div>
+
+            <div className="portal-card" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '30px' }}>
+              
+              {/* Left Column: Select Country */}
+              <div style={{ borderRight: '1px solid rgba(255,255,255,0.08)', paddingRight: '20px' }}>
+                <label className="portal-input-label">Select Country to Customize</label>
+                <select
+                  value={selectedAdminCountryId}
+                  onChange={(e) => setSelectedAdminCountryId(e.target.value)}
+                  className="portal-select"
+                  style={{ width: '100%', marginBottom: '20px' }}
+                >
+                  {(Array.isArray(countriesData) ? countriesData : []).map(country => (
+                    <option key={country.id} value={country.id}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+
+                <div style={{ backgroundColor: 'rgba(210,125,45,0.06)', border: '1px solid rgba(210,125,45,0.15)', borderRadius: '6px', padding: '15px' }}>
+                  <p style={{ fontSize: '0.75rem', color: '#CBD5E1', lineHeight: 1.4, margin: 0 }}>
+                    <strong>Admin Note:</strong> Changing this info updates what is written on the top public explore page and the drone video tour. Landowners cannot edit these fields.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Column: Specifications Form */}
+              <form onSubmit={handleSaveCountrySpecs} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div>
+                    <label className="portal-input-label">Motto / Tagline</label>
+                    <input
+                      type="text"
+                      value={adminCountryForm.motto}
+                      onChange={(e) => setAdminCountryForm({ ...adminCountryForm, motto: e.target.value })}
+                      required
+                      placeholder="e.g. The Cradle of Humanity & Innovation"
+                      className="portal-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="portal-input-label">Accent Theme Color</label>
+                    <input
+                      type="text"
+                      value={adminCountryForm.accent}
+                      onChange={(e) => setAdminCountryForm({ ...adminCountryForm, accent: e.target.value })}
+                      required
+                      placeholder="e.g. #D27D2D or #1A3E26"
+                      className="portal-input"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="portal-input-label">Public Overview Description</label>
+                  <textarea
+                    value={adminCountryForm.desc}
+                    onChange={(e) => setAdminCountryForm({ ...adminCountryForm, desc: e.target.value })}
+                    required
+                    rows={4}
+                    placeholder="Enter country overview copy here..."
+                    className="portal-input"
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px' }}>
+                  <div>
+                    <label className="portal-input-label">Drone Tour Video URL (Direct Video Source Link)</label>
+                    <input
+                      type="url"
+                      value={adminCountryForm.videoUrl}
+                      onChange={(e) => setAdminCountryForm({ ...adminCountryForm, videoUrl: e.target.value })}
+                      required
+                      placeholder="e.g. https://www.w3schools.com/html/mov_bbb.mp4"
+                      className="portal-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="portal-input-label">Highlights (Comma-Separated)</label>
+                    <input
+                      type="text"
+                      value={adminCountryForm.highlights}
+                      onChange={(e) => setAdminCountryForm({ ...adminCountryForm, highlights: e.target.value })}
+                      required
+                      placeholder="Highlight A, Highlight B, Highlight C"
+                      className="portal-input"
+                    />
+                  </div>
+                </div>
+
+                <h3 style={{ fontSize: '1.05rem', color: 'var(--accent-gold)', borderBottom: '1px solid rgba(210,125,45,0.15)', paddingBottom: '6px', margin: '15px 0 5px 0', fontWeight: 600 }}>Culture & Topography Guidelines</h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div>
+                    <label className="portal-input-label">Why Live Here</label>
+                    <textarea
+                      value={adminCountryForm.whyLive}
+                      onChange={(e) => setAdminCountryForm({ ...adminCountryForm, whyLive: e.target.value })}
+                      required
+                      rows={3}
+                      className="portal-input"
+                      style={{ resize: 'vertical' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="portal-input-label">Best Architectural Style to Build</label>
+                    <textarea
+                      value={adminCountryForm.bestBuild}
+                      onChange={(e) => setAdminCountryForm({ ...adminCountryForm, bestBuild: e.target.value })}
+                      required
+                      rows={3}
+                      className="portal-input"
+                      style={{ resize: 'vertical' }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="portal-input-label">Community & Shared Values</label>
+                  <textarea
+                    value={adminCountryForm.culture}
+                    onChange={(e) => setAdminCountryForm({ ...adminCountryForm, culture: e.target.value })}
+                    required
+                    rows={2}
+                    className="portal-input"
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button type="submit" className="portal-btn-save hover-lift" style={{ width: 'auto', padding: '12px 35px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Save size={16} />
+                    <span>Save Country Specifications</span>
+                  </button>
+                </div>
+
+              </form>
+
+            </div>
           </div>
         )}
 

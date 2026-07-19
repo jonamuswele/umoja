@@ -328,5 +328,99 @@ export const apiService = {
         viewsChart
       };
     }
+  },
+
+  // 9. Register a new Owner Account (Pending Approval)
+  register: async (username, password, label) => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, label })
+    });
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail || "Registration failed");
+    }
+    return await response.json();
+  },
+
+  // 10. Get Pending Owner Approvals (Admin Only)
+  getPendingUsers: async (userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/pending-users`, {
+        method: "GET",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to fetch pending users");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline or error loading pending users", error);
+      return [];
+    }
+  },
+
+  // 11. Approve Owner User Registration (Admin Only)
+  approveUser: async (username, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/approve-user/${username}`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Approval failed");
+    return await response.json();
+  },
+
+  // 12. Get System Customization Notifications (Admin Only)
+  getNotifications: async (userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/notifications`, {
+        method: "GET",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to fetch notifications");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline or error loading notifications", error);
+      return [];
+    }
+  },
+
+  // 13. Mark Notification as Read (Admin Only)
+  readNotification: async (notifId, userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/notifications/${notifId}/read`, {
+        method: "POST",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to read notification");
+      return await response.json();
+    } catch (error) {
+      console.warn("Error marking notification read", error);
+    }
+  },
+
+  // 14. Admin Adds a New Country (Name and Flag)
+  addCountry: async (countryData, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/countries`, {
+      method: "POST",
+      headers: getHeaders(userProfile),
+      body: JSON.stringify({ name: countryData.name, flag: countryData.flag })
+    });
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail || "Adding country failed");
+    }
+    const newCountry = await response.json();
+    
+    // Offline local storage sync
+    try {
+      let local = [];
+      const localRaw = localStorage.getItem('umoja_countries_data');
+      if (localRaw) local = JSON.parse(localRaw);
+      local.push(newCountry);
+      localStorage.setItem('umoja_countries_data', JSON.stringify(local));
+    } catch (e) {
+      console.error("Local catalog sync failed in addCountry", e);
+    }
+    return newCountry;
   }
 };

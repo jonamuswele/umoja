@@ -297,7 +297,7 @@ export default function App() {
   // Fetch directory from backend on mount (supports offline fallback)
   useEffect(() => {
     apiService.getCountries().then(data => {
-      if (data) setCountriesData(data);
+      if (Array.isArray(data)) setCountriesData(data);
     });
   }, []);
 

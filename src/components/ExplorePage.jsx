@@ -940,24 +940,7 @@ ${inquiryForm.fullName}`;
   const selectedCountry = countries.find(c => c.id === selectedCountryId);
   const plots = Array.isArray(selectedCountry?.plots) ? selectedCountry.plots : [];
 
-  // Track plot views (clicks) when they become active in native scrolling
-  useEffect(() => {
-    if (selectedCountryId && activeIndex >= 1 && activeIndex <= plots.length) {
-      const activePlot = plots[activeIndex - 1];
-      if (activePlot) {
-        try {
-          const viewedPlots = JSON.parse(sessionStorage.getItem('umoja_viewed_plots') || '[]');
-          if (Array.isArray(viewedPlots) && !viewedPlots.includes(activePlot.id)) {
-            apiService.trackView(activePlot.id);
-            viewedPlots.push(activePlot.id);
-            sessionStorage.setItem('umoja_viewed_plots', JSON.stringify(viewedPlots));
-          }
-        } catch (e) {
-          console.warn("Failed to parse viewed plots from session storage", e);
-        }
-      }
-    }
-  }, [selectedCountryId, activeIndex, plots]);
+
 
   // Track mouse coordinates for background depth effect
   useEffect(() => {
@@ -1002,6 +985,25 @@ ${inquiryForm.fullName}`;
   };
 
   const { progress, activeIndex } = getScrollIndexInfo();
+
+  // Track plot views (clicks) when they become active in native scrolling (Safely executed after activeIndex is declared)
+  useEffect(() => {
+    if (selectedCountryId && activeIndex >= 1 && activeIndex <= plots.length) {
+      const activePlot = plots[activeIndex - 1];
+      if (activePlot) {
+        try {
+          const viewedPlots = JSON.parse(sessionStorage.getItem('umoja_viewed_plots') || '[]');
+          if (Array.isArray(viewedPlots) && !viewedPlots.includes(activePlot.id)) {
+            apiService.trackView(activePlot.id);
+            viewedPlots.push(activePlot.id);
+            sessionStorage.setItem('umoja_viewed_plots', JSON.stringify(viewedPlots));
+          }
+        } catch (e) {
+          console.warn("Failed to parse viewed plots from session storage", e);
+        }
+      }
+    }
+  }, [selectedCountryId, activeIndex, plots]);
 
   // Get layout styles for a given section index based on scroll distance (opacity + zoom + slide transitions)
   const getSectionStyle = (idx) => {

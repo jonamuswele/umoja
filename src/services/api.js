@@ -159,6 +159,83 @@ export const apiService = {
     }
   },
 
+  // 4a. Delete Listing (Owner or Admin Only)
+  deletePlot: async (plotId, userProfile, countryId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/plots/${plotId}`, {
+        method: "DELETE",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Plot deletion failed");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline, deleting plot locally.", error);
+      
+      let local = [];
+      try {
+        const localRaw = localStorage.getItem('umoja_countries_data');
+        if (localRaw) local = JSON.parse(localRaw);
+      } catch (e) {
+        console.error("Local catalog parse failed in deletePlot", e);
+      }
+      if (!Array.isArray(local)) local = [];
+
+      const updated = local.map(c => {
+        if (c.id === countryId) {
+          return {
+            ...c,
+            plots: (c.plots || []).filter(p => p.id !== plotId)
+          };
+        }
+        return c;
+      });
+      localStorage.setItem('umoja_countries_data', JSON.stringify(updated));
+      return { status: "success", plotId };
+    }
+  },
+
+  // 4b. Update Country Specifications (Admin Only)
+  updateCountry: async (countryId, countryData, userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/countries/${countryId}`, {
+        method: "PUT",
+        headers: getHeaders(userProfile),
+        body: JSON.stringify(countryData)
+      });
+      if (!response.ok) throw new Error("Country update failed");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline, saving country specifications locally.", error);
+      
+      let local = [];
+      try {
+        const localRaw = localStorage.getItem('umoja_countries_data');
+        if (localRaw) local = JSON.parse(localRaw);
+      } catch (e) {
+        console.error("Local catalog parse failed in updateCountry", e);
+      }
+      if (!Array.isArray(local)) local = [];
+
+      const updated = local.map(c => {
+        if (c.id === countryId) {
+          return {
+            ...c,
+            motto: countryData.motto,
+            desc: countryData.desc,
+            videoUrl: countryData.videoUrl,
+            accent: countryData.accent,
+            highlights: countryData.highlights,
+            potentialNeighborhoods: countryData.potentialNeighborhoods,
+            cultureInfo: countryData.cultureInfo
+          };
+        }
+        return c;
+      });
+      localStorage.setItem('umoja_countries_data', JSON.stringify(updated));
+      return { id: countryId, ...countryData };
+    }
+  },
+
   // 5. Increment View Count
   trackView: async (plotId) => {
     try {
@@ -286,5 +363,154 @@ export const apiService = {
         viewsChart
       };
     }
+  },
+
+  // 9. Register a new Owner Account (Pending Approval)
+  register: async (username, password, label) => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, label })
+    });
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail || "Registration failed");
+    }
+    return await response.json();
+  },
+
+  // 10. Get Pending Owner Approvals (Admin Only)
+  getPendingUsers: async (userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/pending-users`, {
+        method: "GET",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to fetch pending users");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline or error loading pending users", error);
+      return [];
+    }
+  },
+
+  // 11. Approve Owner User Registration (Admin Only)
+  approveUser: async (username, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/approve-user/${username}`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Approval failed");
+    return await response.json();
+  },
+
+  // 12. Get System Customization Notifications (Admin Only)
+  getNotifications: async (userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/notifications`, {
+        method: "GET",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to fetch notifications");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline or error loading notifications", error);
+      return [];
+    }
+  },
+
+  // 13. Mark Notification as Read (Admin Only)
+  readNotification: async (notifId, userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/notifications/${notifId}/read`, {
+        method: "POST",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to read notification");
+      return await response.json();
+    } catch (error) {
+      console.warn("Error marking notification read", error);
+    }
+  },
+
+  // 14. Admin Adds a New Country (Name and Flag)
+  addCountry: async (countryData, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/countries`, {
+      method: "POST",
+      headers: getHeaders(userProfile),
+      body: JSON.stringify({ name: countryData.name, flag: countryData.flag })
+    });
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail || "Adding country failed");
+    }
+    const newCountry = await response.json();
+    
+    // Offline local storage sync
+    try {
+      let local = [];
+      const localRaw = localStorage.getItem('umoja_countries_data');
+      if (localRaw) local = JSON.parse(localRaw);
+      local.push(newCountry);
+      localStorage.setItem('umoja_countries_data', JSON.stringify(local));
+    } catch (e) {
+      console.error("Local catalog sync failed in addCountry", e);
+    }
+    return newCountry;
+  },
+
+  // 15. Get All Users (Admin Only)
+  getUsers: async (userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+        method: "GET",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to fetch users list");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline or error loading users", error);
+      return [];
+    }
+  },
+
+  // 16. Toggle Suspension (Admin Only)
+  toggleSuspendUser: async (username, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/users/${username}/suspend`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to toggle user suspension");
+    return await response.json();
+  },
+
+  // 17. Delete User Account (Admin Only)
+  deleteUser: async (username, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/users/${username}`, {
+      method: "DELETE",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to delete user");
+    return await response.json();
+  },
+
+  // 18. Toggle Country Visibility (Admin Only)
+  toggleCountryVisibility: async (countryId, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/countries/${countryId}/visibility`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to toggle country visibility");
+    return await response.json();
+  },
+
+  // 19. Toggle Plot Visibility (Admin Only)
+  togglePlotVisibility: async (plotId, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/plots/${plotId}/visibility`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to toggle plot visibility");
+    return await response.json();
   }
 };

@@ -536,6 +536,42 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     }
   };
 
+  // Landowner Delete Plot Handler
+  const handleDeletePlotClick = async () => {
+    if (!selectedPlotId) return;
+    const targetPlot = filteredPlotsList.find(p => p.id === selectedPlotId);
+    if (!targetPlot) return;
+
+    const confirmDelete = window.confirm(`Are you sure you want to permanently delete "${targetPlot.title}"?`);
+    if (!confirmDelete) return;
+
+    try {
+      await apiService.deletePlot(selectedPlotId, currentUser, targetPlot.countryId);
+      
+      // Update local state catalog by removing this plot
+      setCountriesData(prevData => prevData.map(country => {
+        if (country.id === targetPlot.countryId) {
+          return {
+            ...country,
+            plots: (country.plots || []).filter(p => p.id !== selectedPlotId)
+          };
+        }
+        return country;
+      }));
+
+      alert("Plot listing deleted successfully!");
+      setSelectedPlotId('');
+      
+      // Refresh dashboard analytics
+      apiService.getDashboardStats(currentUser, countriesData).then(stats => {
+        if (stats) setDashboardStats(stats);
+      });
+    } catch (err) {
+      console.error("Delete failed", err);
+      alert("Failed to delete the listing.");
+    }
+  };
+
   // Find country name of currently selected plot
   const getSelectedPlotCountryName = () => {
     if (customizerMode === 'edit') {
@@ -1238,11 +1274,38 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-                    <button type="submit" disabled={customizerMode === 'edit' && filteredPlotsList.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="portal-btn-save">
-                      <Save size={16} />
-                      <span>{customizerMode === 'edit' ? 'Save Listing Changes' : 'Create Listing'}</span>
-                    </button>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', gap: '15px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button type="submit" disabled={customizerMode === 'edit' && filteredPlotsList.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: 'auto' }} className="portal-btn-save">
+                        <Save size={16} />
+                        <span>{customizerMode === 'edit' ? 'Save Listing Changes' : 'Create Listing'}</span>
+                      </button>
+
+                      {customizerMode === 'edit' && filteredPlotsList.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleDeletePlotClick}
+                          style={{
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#EF4444',
+                            borderRadius: '4px',
+                            padding: '8px 16px',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                        >
+                          Delete Listing
+                        </button>
+                      )}
+                    </div>
 
                     {saveSuccess && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10B981', fontSize: '0.8rem', fontWeight: 600 }} className="animate-fade-in">

@@ -122,6 +122,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
   // Admin data states
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [viewingUserPlots, setViewingUserPlots] = useState(null);
   const [notifications, setNotifications] = useState([]);
 
   // Portal Navigation State
@@ -330,6 +331,12 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
         setAllUsers(usersList);
         const notifs = await apiService.getNotifications(currentUser);
         setNotifications(notifs);
+        
+        // Load complete directory (including hidden items)
+        const allCountries = await apiService.getCountries(currentUser);
+        if (Array.isArray(allCountries)) {
+          setCountriesData(allCountries);
+        }
       } catch (err) {
         console.error("Failed to load admin verification data", err);
       }
@@ -375,7 +382,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
       alert(`User ${usernameToDelete} has been successfully deleted.`);
       
       // Update local state catalog to remove their plots
-      const freshCountries = await apiService.getCountries();
+      const freshCountries = await apiService.getCountries(currentUser);
       if (Array.isArray(freshCountries)) {
         setCountriesData(freshCountries);
       }
@@ -391,7 +398,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     try {
       const res = await apiService.toggleCountryVisibility(countryId, currentUser);
       alert(`Country visibility updated to: ${res.isVisible ? "VISIBLE" : "HIDDEN"}`);
-      const freshCountries = await apiService.getCountries();
+      const freshCountries = await apiService.getCountries(currentUser);
       if (Array.isArray(freshCountries)) setCountriesData(freshCountries);
     } catch (err) {
       console.error("Failed to toggle country visibility", err);
@@ -404,7 +411,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     try {
       const res = await apiService.togglePlotVisibility(plotId, currentUser);
       alert(`Plot visibility updated to: ${res.isVisible ? "VISIBLE" : "HIDDEN"}`);
-      const freshCountries = await apiService.getCountries();
+      const freshCountries = await apiService.getCountries(currentUser);
       if (Array.isArray(freshCountries)) setCountriesData(freshCountries);
     } catch (err) {
       console.error("Failed to toggle plot visibility", err);
@@ -420,6 +427,19 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     } catch (err) {
       console.error("Read notification failed", err);
     }
+  };
+
+  // Get count of plots owned by a specific user
+  const getOwnerPlotsCount = (ownerUsername) => {
+    let count = 0;
+    (countriesData || []).forEach(c => {
+      (c.plots || []).forEach(p => {
+        if (p.owner_username === ownerUsername || p.owner === ownerUsername) {
+          count++;
+        }
+      });
+    });
+    return count;
   };
 
   // Handle Logout
@@ -588,7 +608,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
       setNewCountryFlag('');
       
       // Re-fetch database countries list
-      const freshCountries = await apiService.getCountries();
+      const freshCountries = await apiService.getCountries(currentUser);
       if (Array.isArray(freshCountries)) {
         setCountriesData(freshCountries);
         setSelectedAdminCountryId(added.id); // Focus the admin editor on this country
@@ -2054,6 +2074,30 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                           </td>
                           <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                             <button
+                              onClick={() => setViewingUserPlots(user.username)}
+                              type="button"
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '0.75rem',
+                                width: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: 'transparent',
+                                border: '1px solid var(--accent-gold)',
+                                color: 'var(--accent-gold)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(210,125,45,0.1)'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                              <Building size={12} />
+                              <span>View Listings ({getOwnerPlotsCount(user.username)})</span>
+                            </button>
+
+                            <button
                               onClick={() => handleToggleSuspendUser(user.username)}
                               className="portal-btn-save hover-lift"
                               style={{
@@ -2104,6 +2148,171 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                 </div>
               )}
             </div>
+
+            {/* VIEW LANDOWNER PLOTS MODAL/PANEL (Admin Only) */}
+            {viewingUserPlots && (
+              <div style={{
+                position: 'fixed',
+                inset: 0,
+                backgroundColor: 'rgba(10, 15, 12, 0.85)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                backdropFilter: 'blur(8px)'
+              }}>
+                <div className="portal-card" style={{ width: '90%', maxWidth: '800px', maxHeight: '85vh', overflowY: 'auto', position: 'relative', border: '1px solid var(--accent-gold)' }}>
+                  <button
+                    onClick={() => setViewingUserPlots(null)}
+                    type="button"
+                    style={{
+                      position: 'absolute',
+                      top: '15px',
+                      right: '20px',
+                      background: 'none',
+                      border: 'none',
+                      color: '#94A3B8',
+                      fontSize: '1.2rem',
+                      cursor: 'pointer'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#FFFFFF'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'}
+                  >
+                    ✕
+                  </button>
+
+                  <h3 style={{ fontSize: '1.2rem', fontFamily: 'var(--font-serif)', color: 'var(--accent-gold)', marginBottom: '5px' }}>
+                    Listing Inventory: {viewingUserPlots}
+                  </h3>
+                  <p style={{ fontSize: '0.78rem', color: '#94A3B8', marginBottom: '20px' }}>
+                    Displaying all land specifications published by this landowner. Admin can override visibility or delete individual items.
+                  </p>
+
+                  {(() => {
+                    const landownerPlots = [];
+                    (countriesData || []).forEach(c => {
+                      (c.plots || []).forEach(p => {
+                        if (p.owner_username === viewingUserPlots || p.owner === viewingUserPlots) {
+                          landownerPlots.push({ ...p, countryName: c.name, countryId: c.id });
+                        }
+                      });
+                    });
+
+                    if (landownerPlots.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748B', fontStyle: 'italic' }}>
+                          No listings registered for this landowner yet.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="portal-table-container">
+                        <table className="portal-table">
+                          <thead>
+                            <tr>
+                              <th>Plot Details</th>
+                              <th>Region</th>
+                              <th>Price (USD)</th>
+                              <th>Visibility</th>
+                              <th style={{ textAlign: 'right' }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {landownerPlots.map(plot => (
+                              <tr key={plot.id}>
+                                <td>
+                                  <div style={{ fontWeight: 600, color: '#FFFFFF' }}>{plot.title}</div>
+                                  <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>{plot.size}</div>
+                                </td>
+                                <td style={{ color: '#CBD5E1' }}>{plot.countryName}</td>
+                                <td style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>
+                                  ${plot.price.toLocaleString()}
+                                </td>
+                                <td>
+                                  <span style={{
+                                    backgroundColor: plot.isVisible ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                    color: plot.isVisible ? '#10B981' : '#EF4444',
+                                    border: `1px solid ${plot.isVisible ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 600
+                                  }}>
+                                    {plot.isVisible ? 'VISIBLE' : 'HIDDEN'}
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                  <button
+                                    onClick={async () => {
+                                      await handleTogglePlotVisibility(plot.id);
+                                    }}
+                                    type="button"
+                                    style={{
+                                      padding: '4px 10px',
+                                      fontSize: '0.72rem',
+                                      cursor: 'pointer',
+                                      border: '1px solid var(--accent-gold)',
+                                      backgroundColor: 'transparent',
+                                      color: 'var(--accent-gold)',
+                                      borderRadius: '4px'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(210,125,45,0.1)'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                  >
+                                    {plot.isVisible ? 'Hide' : 'Unhide'}
+                                  </button>
+
+                                  <button
+                                    onClick={async () => {
+                                      const conf = window.confirm(`Are you sure you want to delete plot "${plot.title}"?`);
+                                      if (!conf) return;
+                                      try {
+                                        await apiService.deletePlot(plot.id, currentUser, plot.countryId);
+                                        alert("Plot listing deleted successfully!");
+                                        const freshCountries = await apiService.getCountries(currentUser);
+                                        if (Array.isArray(freshCountries)) setCountriesData(freshCountries);
+                                      } catch (e) {
+                                        alert("Failed to delete plot.");
+                                      }
+                                    }}
+                                    type="button"
+                                    style={{
+                                      padding: '4px 10px',
+                                      fontSize: '0.72rem',
+                                      cursor: 'pointer',
+                                      border: '1px solid rgba(239,68,68,0.3)',
+                                      backgroundColor: 'rgba(239,68,68,0.1)',
+                                      color: '#EF4444',
+                                      borderRadius: '4px'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.2)'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'}
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                    <button
+                      onClick={() => setViewingUserPlots(null)}
+                      type="button"
+                      className="portal-btn-save"
+                      style={{ width: 'auto', padding: '8px 25px' }}
+                    >
+                      Close Window
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

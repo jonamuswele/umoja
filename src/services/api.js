@@ -39,9 +39,11 @@ export const apiService = {
   },
 
   // 2. Fetch Directory (Countries & Plots)
-  getCountries: async () => {
+  getCountries: async (userProfile) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/countries`);
+      const response = await fetch(`${API_BASE_URL}/api/countries`, {
+        headers: getHeaders(userProfile)
+      });
       if (!response.ok) throw new Error("Directory fetch failed");
       const data = await response.json();
       
@@ -398,7 +400,8 @@ export const apiService = {
   approveUser: async (username, userProfile) => {
     const response = await fetch(`${API_BASE_URL}/api/admin/approve-user/${username}`, {
       method: "POST",
-      headers: getHeaders(userProfile)
+      headers: getHeaders(userProfile),
+      body: JSON.stringify({})
     });
     if (!response.ok) throw new Error("Approval failed");
     return await response.json();
@@ -424,7 +427,8 @@ export const apiService = {
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/notifications/${notifId}/read`, {
         method: "POST",
-        headers: getHeaders(userProfile)
+        headers: getHeaders(userProfile),
+        body: JSON.stringify({})
       });
       if (!response.ok) throw new Error("Failed to read notification");
       return await response.json();
@@ -478,7 +482,8 @@ export const apiService = {
   toggleSuspendUser: async (username, userProfile) => {
     const response = await fetch(`${API_BASE_URL}/api/admin/users/${username}/suspend`, {
       method: "POST",
-      headers: getHeaders(userProfile)
+      headers: getHeaders(userProfile),
+      body: JSON.stringify({})
     });
     if (!response.ok) throw new Error("Failed to toggle user suspension");
     return await response.json();
@@ -498,7 +503,8 @@ export const apiService = {
   toggleCountryVisibility: async (countryId, userProfile) => {
     const response = await fetch(`${API_BASE_URL}/api/admin/countries/${countryId}/visibility`, {
       method: "POST",
-      headers: getHeaders(userProfile)
+      headers: getHeaders(userProfile),
+      body: JSON.stringify({})
     });
     if (!response.ok) throw new Error("Failed to toggle country visibility");
     return await response.json();
@@ -508,7 +514,8 @@ export const apiService = {
   togglePlotVisibility: async (plotId, userProfile) => {
     const response = await fetch(`${API_BASE_URL}/api/admin/plots/${plotId}/visibility`, {
       method: "POST",
-      headers: getHeaders(userProfile)
+      headers: getHeaders(userProfile),
+      body: JSON.stringify({})
     });
     if (!response.ok) throw new Error("Failed to toggle plot visibility");
     return await response.json();

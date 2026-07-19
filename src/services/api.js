@@ -159,6 +159,41 @@ export const apiService = {
     }
   },
 
+  // 4a. Delete Listing (Owner or Admin Only)
+  deletePlot: async (plotId, userProfile, countryId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/plots/${plotId}`, {
+        method: "DELETE",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Plot deletion failed");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline, deleting plot locally.", error);
+      
+      let local = [];
+      try {
+        const localRaw = localStorage.getItem('umoja_countries_data');
+        if (localRaw) local = JSON.parse(localRaw);
+      } catch (e) {
+        console.error("Local catalog parse failed in deletePlot", e);
+      }
+      if (!Array.isArray(local)) local = [];
+
+      const updated = local.map(c => {
+        if (c.id === countryId) {
+          return {
+            ...c,
+            plots: (c.plots || []).filter(p => p.id !== plotId)
+          };
+        }
+        return c;
+      });
+      localStorage.setItem('umoja_countries_data', JSON.stringify(updated));
+      return { status: "success", plotId };
+    }
+  },
+
   // 4b. Update Country Specifications (Admin Only)
   updateCountry: async (countryId, countryData, userProfile) => {
     try {

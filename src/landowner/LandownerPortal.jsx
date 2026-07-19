@@ -23,6 +23,16 @@ import {
 import { apiService } from '../services/api';
 import './LandownerPortal.css';
 
+const ALL_AFRICAN_COUNTRIES = [
+  "Algeria", "Angola", "Benin", "Botswana", "Burkina Faso", "Burundi", "Cabo Verde", "Cameroon", 
+  "Central African Republic", "Chad", "Comoros", "Congo (Brazzaville)", "DRC (Congo)", "Djibouti", 
+  "Egypt", "Equatorial Guinea", "Eritrea", "Eswatini", "Ethiopia", "Gabon", "Gambia", "Ghana", 
+  "Guinea", "Guinea-Bissau", "Ivory Coast", "Kenya", "Lesotho", "Liberia", "Libya", "Madagascar", 
+  "Malawi", "Mali", "Mauritania", "Mauritius", "Morocco", "Mozambique", "Namibia", "Niger", 
+  "Nigeria", "Rwanda", "Sao Tome and Principe", "Senegal", "Seychelles", "Sierra Leone", "Somalia", 
+  "South Africa", "South Sudan", "Sudan", "Tanzania", "Togo", "Tunisia", "Uganda", "Zambia", "Zimbabwe"
+];
+
 // Mini internal Polaroid cluster component for real-time preview (matching ExplorePage styling)
 function PreviewPhotoCluster({ photos, accent }) {
   if (!photos || photos.length === 0) return null;
@@ -103,10 +113,17 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [regLabel, setRegLabel] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registrationSuccessMsg, setRegistrationSuccessMsg] = useState('');
   const [loginError, setLoginError] = useState('');
 
+  // Admin data states
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+
   // Portal Navigation State
-  const [activePortalTab, setActivePortalTab] = useState('dashboard'); // dashboard, customize, inquiries
+  const [activePortalTab, setActivePortalTab] = useState('dashboard');
   
   // Customizer view: 'edit' (Edit Existing Plot) vs 'add' (Add New Plot)
   const [customizerMode, setCustomizerMode] = useState('edit'); 
@@ -132,6 +149,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     desc: '',
     videoUrl: '',
     accent: '#1A3E26',
+    flag: '🌍',
     highlights: '',
     whyLive: '',
     bestBuild: '',
@@ -139,6 +157,9 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     potentialNeighborhoods: [],
     culturePhotos: []
   });
+
+  const [newCountryName, setNewCountryName] = useState('');
+  const [newCountryFlag, setNewCountryFlag] = useState('');
 
   // Populate admin country form when selectedAdminCountryId or countriesData changes
   useEffect(() => {
@@ -155,6 +176,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
           desc: countryObj.desc || '',
           videoUrl: countryObj.videoUrl || '',
           accent: countryObj.accent || '#1A3E26',
+          flag: countryObj.flag || '🌍',
           highlights: Array.isArray(countryObj.highlights) ? countryObj.highlights.join(', ') : '',
           whyLive: cult.whyLive || '',
           bestBuild: cult.bestBuild || '',
@@ -266,6 +288,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError('');
+    setRegistrationSuccessMsg('');
     try {
       const profile = await apiService.login(username, password);
       setCurrentUser(profile);
@@ -275,10 +298,75 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     }
   };
 
+  // Handle Landowner Registration
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setRegistrationSuccessMsg('');
+    try {
+      if (!username || !password || !regLabel) {
+        setLoginError('All registration fields are required.');
+        return;
+      }
+      await apiService.register(username, password, regLabel);
+      setRegistrationSuccessMsg('Registration request submitted! Please wait for Admin approval before logging in.');
+      setIsRegistering(false);
+      setPassword('');
+      setRegLabel('');
+    } catch (err) {
+      setLoginError(err.message || 'Registration failed.');
+    }
+  };
+
+  // Fetch admin approval queue and notifications
+  const fetchAdminData = async () => {
+    if (currentUser?.role === 'admin') {
+      try {
+        const pending = await apiService.getPendingUsers(currentUser);
+        setPendingUsers(pending);
+        const notifs = await apiService.getNotifications(currentUser);
+        setNotifications(notifs);
+      } catch (err) {
+        console.error("Failed to load admin verification data", err);
+      }
+    }
+  };
+
+  // Trigger admin data load
+  useEffect(() => {
+    fetchAdminData();
+  }, [currentUser]);
+
+  // Handle Owner Approval
+  const handleApproveUser = async (userToApprove) => {
+    try {
+      await apiService.approveUser(userToApprove, currentUser);
+      alert(`User ${userToApprove} has been approved!`);
+      fetchAdminData(); // Refresh queue
+    } catch (err) {
+      console.error("Approve failed", err);
+      alert("Failed to approve user");
+    }
+  };
+
+  // Handle Mark Notification Read
+  const handleReadNotification = async (notifId) => {
+    try {
+      await apiService.readNotification(notifId, currentUser);
+      fetchAdminData(); // Refresh notifications
+    } catch (err) {
+      console.error("Read notification failed", err);
+    }
+  };
+
   // Handle Logout
   const handleLogout = () => {
     setCurrentUser(null);
     sessionStorage.removeItem('umoja_current_user');
+    setUsername('');
+    setPassword('');
+    setIsRegistering(false);
+    setRegistrationSuccessMsg('');
   };
 
   // Handle Form field changes
@@ -386,6 +474,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
         desc: adminCountryForm.desc,
         videoUrl: adminCountryForm.videoUrl,
         accent: adminCountryForm.accent,
+        flag: adminCountryForm.flag,
         highlights: formattedHighlights,
         potentialNeighborhoods: adminCountryForm.potentialNeighborhoods,
         cultureInfo: {
@@ -418,6 +507,35 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     }
   };
 
+  // Admin Create New Country Page Handler
+  const handleCreateCountry = async (e) => {
+    e.preventDefault();
+    if (!newCountryName.trim()) {
+      alert("Please enter a country name.");
+      return;
+    }
+    try {
+      const added = await apiService.addCountry({
+        name: newCountryName.trim(),
+        flag: newCountryFlag.trim() || '🌍'
+      }, currentUser);
+      
+      alert(`Country ${added.name} ${added.flag} added successfully!`);
+      setNewCountryName('');
+      setNewCountryFlag('');
+      
+      // Re-fetch database countries list
+      const freshCountries = await apiService.getCountries();
+      if (Array.isArray(freshCountries)) {
+        setCountriesData(freshCountries);
+        setSelectedAdminCountryId(added.id); // Focus the admin editor on this country
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Failed to add country page.");
+    }
+  };
+
   // Find country name of currently selected plot
   const getSelectedPlotCountryName = () => {
     if (customizerMode === 'edit') {
@@ -429,63 +547,142 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     }
   };
 
-  // Render Login screen if not authenticated
+  // Render Login / Registration screen if not authenticated
   if (!currentUser) {
     return (
       <div className="landowner-portal-wrapper">
         <div className="portal-login-container animate-fade-in">
           <div className="portal-login-card">
+            
+            {/* Toggle header title */}
             <div className="portal-login-header">
               <span className="portal-login-subtitle">Tenant Hub</span>
-              <h2 className="portal-login-title">Landowner Portal</h2>
+              <h2 className="portal-login-title">
+                {isRegistering ? 'Register Owner Account' : 'Landowner Portal'}
+              </h2>
               <p style={{ color: '#64748B', fontSize: '0.8rem', marginTop: '6px' }}>
-                Secure multi-tenant database workspace. Access metrics and customize specifications for your listings.
+                {isRegistering 
+                  ? 'Submit your landowner account details. System Admin approval is required before logging in.'
+                  : 'Secure multi-tenant database workspace. Access metrics and customize specifications for your listings.'}
               </p>
             </div>
 
-            <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div>
-                <label className="portal-input-label">User Account / Username</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. kenya_owner or nigeria_owner"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="portal-input"
-                />
+            {registrationSuccessMsg && (
+              <div style={{ color: '#10B981', fontSize: '0.78rem', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '12px', borderRadius: '4px', marginBottom: '15px', lineHeight: '1.4' }}>
+                {registrationSuccessMsg}
               </div>
+            )}
 
-              <div>
-                <label className="portal-input-label">Console Access Password</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="portal-input"
-                />
-              </div>
-
-              {loginError && (
-                <div style={{ color: '#EF4444', fontSize: '0.78rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '10px', borderRadius: '4px' }}>
-                  {loginError}
+            {isRegistering ? (
+              /* REGISTRATION FORM */
+              <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div>
+                  <label className="portal-input-label">Request Username</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. rwanda_owner"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ''))}
+                    className="portal-input"
+                  />
                 </div>
-              )}
 
-              <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} className="portal-btn-save">
-                <Lock size={16} />
-                <span>Verify Credentials & Enter</span>
-              </button>
-            </form>
+                <div>
+                  <label className="portal-input-label">Full Name / Organization Label</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Kigali Real Estate Ltd"
+                    value={regLabel}
+                    onChange={(e) => setRegLabel(e.target.value)}
+                    className="portal-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="portal-input-label">Access Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="portal-input"
+                  />
+                </div>
+
+                {loginError && (
+                  <div style={{ color: '#EF4444', fontSize: '0.78rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '10px', borderRadius: '4px' }}>
+                    {loginError}
+                  </div>
+                )}
+
+                <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} className="portal-btn-save">
+                  <Sparkles size={16} />
+                  <span>Submit Registration Request</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={() => { setIsRegistering(false); setLoginError(''); }}
+                  style={{ border: 'none', background: 'none', color: 'var(--accent-gold)', fontSize: '0.8rem', cursor: 'pointer', textAlign: 'center', marginTop: '5px' }}
+                >
+                  Already have an account? Login here
+                </button>
+              </form>
+            ) : (
+              /* LOGIN FORM */
+              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div>
+                  <label className="portal-input-label">User Account / Username</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. admin or landowner_name"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="portal-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="portal-input-label">Console Access Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="portal-input"
+                  />
+                </div>
+
+                {loginError && (
+                  <div style={{ color: '#EF4444', fontSize: '0.78rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '10px', borderRadius: '4px' }}>
+                    {loginError}
+                  </div>
+                )}
+
+                <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} className="portal-btn-save">
+                  <Lock size={16} />
+                  <span>Verify Credentials & Enter</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={() => { setIsRegistering(true); setLoginError(''); setRegistrationSuccessMsg(''); }}
+                  style={{ border: 'none', background: 'none', color: 'var(--accent-gold)', fontSize: '0.8rem', cursor: 'pointer', textAlign: 'center', marginTop: '5px' }}
+                >
+                  New landowner? Register account for approval
+                </button>
+              </form>
+            )}
 
             <div style={{ marginTop: '20px', backgroundColor: 'rgba(210, 125, 45, 0.06)', border: '1px solid rgba(210, 125, 45, 0.15)', borderRadius: '4px', padding: '14px', fontSize: '0.74rem', color: 'var(--accent-gold)' }}>
-              <strong>Credential Guidelines:</strong><br />
-              • Global Admin: <code style={{ color: '#FFFFFF' }}>admin</code> / <code style={{ color: '#FFFFFF' }}>admin</code><br />
-              • Kenya Landowner: <code style={{ color: '#FFFFFF' }}>kenya_owner</code> / <code style={{ color: '#FFFFFF' }}>umoja</code><br />
-              • Nigeria Landowner: <code style={{ color: '#FFFFFF' }}>nigeria_owner</code> / <code style={{ color: '#FFFFFF' }}>umoja</code><br />
-              • Register New: Enter any username & password <code style={{ color: '#FFFFFF' }}>umoja</code>
+              <strong>Verification Guidelines:</strong><br />
+              • System Administrator: <code style={{ color: '#FFFFFF' }}>admin</code> / <code style={{ color: '#FFFFFF' }}>admin</code><br />
+              • Landowners: Submit a registration request. The Admin can review and activate your login immediately from the Pending Approvals list.
             </div>
           </div>
         </div>
@@ -514,12 +711,21 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
           </button>
 
           <button 
-            onClick={() => setActivePortalTab('customize')}
-            className={`portal-sidebar-item ${activePortalTab === 'customize' ? 'active' : ''}`}
+            onClick={() => { setActivePortalTab('listings'); setCustomizerMode('edit'); }}
+            className={`portal-sidebar-item ${activePortalTab === 'listings' ? 'active' : ''}`}
             style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
           >
             <Edit size={16} />
-            <span>Customize Listings</span>
+            <span>My Listings</span>
+          </button>
+
+          <button 
+            onClick={() => { setActivePortalTab('addplot'); setCustomizerMode('add'); }}
+            className={`portal-sidebar-item ${activePortalTab === 'addplot' ? 'active' : ''}`}
+            style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
+          >
+            <PlusCircle size={16} />
+            <span>Add New Plot</span>
           </button>
 
           <button 
@@ -532,14 +738,25 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
           </button>
 
           {currentUser.role === 'admin' && (
-            <button 
-              onClick={() => setActivePortalTab('countries')}
-              className={`portal-sidebar-item ${activePortalTab === 'countries' ? 'active' : ''}`}
-              style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
-            >
-              <Globe size={16} />
-              <span>Manage Country Pages</span>
-            </button>
+            <>
+              <button 
+                onClick={() => setActivePortalTab('countries')}
+                className={`portal-sidebar-item ${activePortalTab === 'countries' ? 'active' : ''}`}
+                style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
+              >
+                <Globe size={16} />
+                <span>Manage Country Pages</span>
+              </button>
+
+              <button 
+                onClick={() => setActivePortalTab('approvals')}
+                className={`portal-sidebar-item ${activePortalTab === 'approvals' ? 'active' : ''}`}
+                style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left' }}
+              >
+                <CheckCircle size={16} />
+                <span>Pending Approvals ({pendingUsers.length})</span>
+              </button>
+            </>
           )}
         </nav>
 
@@ -620,6 +837,80 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                 <ArrowUpRight size={14} />
               </button>
             </div>
+
+            {/* System Notifications Alert Queue (Admin Only) */}
+            {currentUser.role === 'admin' && notifications.filter(n => !n.read).length > 0 && (
+              <div className="portal-card" style={{ border: '1px solid rgba(210,125,45,0.4)', background: 'linear-gradient(135deg, rgba(210,125,45,0.08) 0%, rgba(26,62,38,0.15) 100%)', marginBottom: '25px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <Sparkles size={18} style={{ color: 'var(--accent-gold)' }} />
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#FFFFFF', margin: 0 }}>
+                    System Alerts & Tasks ({notifications.filter(n => !n.read).length} Unread)
+                  </h3>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {notifications.filter(n => !n.read).map(notif => (
+                    <div key={notif.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '10px 14px', borderRadius: '6px', gap: '15px' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#CBD5E1', lineHeight: '1.4' }}>
+                        {notif.message}
+                        <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginTop: '2px' }}>
+                          {new Date(notif.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+                        {notif.message.includes('customization') || notif.message.includes('added') ? (
+                          <button
+                            onClick={() => {
+                              handleReadNotification(notif.id);
+                              // Auto select the added country in admin country list
+                              const match = notif.message.match(/'([^']+)'/);
+                              if (match && match[1]) {
+                                const cName = match[1];
+                                const foundCountry = (countriesData || []).find(c => c.name.toLowerCase() === cName.toLowerCase());
+                                if (foundCountry) setSelectedAdminCountryId(foundCountry.id);
+                              }
+                              setActivePortalTab('countries');
+                            }}
+                            className="portal-btn-save"
+                            style={{ padding: '6px 12px', fontSize: '0.72rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <Globe size={12} />
+                            <span>Customize Page</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              handleReadNotification(notif.id);
+                              setActivePortalTab('approvals');
+                            }}
+                            className="portal-btn-save"
+                            style={{ padding: '6px 12px', fontSize: '0.72rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <CheckCircle size={12} />
+                            <span>Manage Approvals</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleReadNotification(notif.id)}
+                          style={{
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            background: 'none',
+                            color: '#94A3B8',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            fontSize: '0.72rem',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#FFFFFF'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Stat Cards Grid */}
             <div className="portal-stats-grid">
@@ -765,65 +1056,19 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
         )}
 
-        {/* 2. TAB: CUSTOMIZE PLOT DETAILS (SPLIT SCREEN VIEW WITH ADD OPTION) */}
-        {activePortalTab === 'customize' && (
+        {/* 2. TAB: CUSTOMIZE PLOT DETAILS (SPLIT SCREEN VIEW) */}
+        {(activePortalTab === 'listings' || activePortalTab === 'addplot') && (
           <div>
             <div className="portal-section-header">
               <div>
                 <p style={{ color: 'var(--accent-gold)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>Customization Desk</p>
                 <h1 className="portal-section-title">
-                  {customizerMode === 'edit' ? 'Modify Existing Specifications' : 'Publish New Land Listing'}
+                  {activePortalTab === 'listings' ? 'Modify Existing Specifications' : 'Publish New Land Listing'}
                 </h1>
-              </div>
-
-              {/* Toggle Customizer Modes */}
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => setCustomizerMode('edit')}
-                  style={{
-                    backgroundColor: customizerMode === 'edit' ? 'var(--accent)' : 'transparent',
-                    border: '1px solid var(--accent)',
-                    color: '#FFFFFF',
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <Edit size={14} />
-                  <span>Edit Plot ({filteredPlotsList.length})</span>
-                </button>
-
-                <button
-                  onClick={() => setCustomizerMode('add')}
-                  style={{
-                    backgroundColor: customizerMode === 'add' ? 'var(--accent)' : 'transparent',
-                    border: '1px solid var(--accent)',
-                    color: '#FFFFFF',
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <PlusCircle size={14} />
-                  <span>Add New Plot</span>
-                </button>
               </div>
             </div>
 
@@ -865,14 +1110,19 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                   ) : (
                     <div>
                       <label className="portal-input-label">Target Listing Country</label>
-                      <input
-                        type="text"
+                      <select
                         value={selectedAddCountryId}
                         onChange={(e) => setSelectedAddCountryId(e.target.value)}
-                        placeholder="Type country name, e.g. Kenya, Uganda, Ghana..."
-                        className="portal-input"
+                        className="portal-select"
                         required
-                      />
+                      >
+                        <option value="">-- Select Target Country --</option>
+                        {ALL_AFRICAN_COUNTRIES.map(cName => (
+                          <option key={cName} value={cName}>
+                            {cName}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   )}
 
@@ -1274,12 +1524,54 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                     <strong>Admin Note:</strong> Changing this info updates what is written on the top public explore page and the drone video tour. Landowners cannot edit these fields.
                   </p>
                 </div>
+
+                <hr style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '20px 0' }} />
+
+                <form onSubmit={handleCreateCountry} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-gold)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                    Add New Country Page
+                  </h4>
+                  
+                  <div>
+                    <label className="portal-input-label" style={{ fontSize: '0.7rem' }}>Country Name</label>
+                    <input
+                      type="text"
+                      value={newCountryName}
+                      onChange={(e) => setNewCountryName(e.target.value)}
+                      placeholder="e.g. Uganda"
+                      className="portal-input"
+                      style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="portal-input-label" style={{ fontSize: '0.7rem' }}>Flag Emoji (Optional)</label>
+                    <input
+                      type="text"
+                      value={newCountryFlag}
+                      onChange={(e) => setNewCountryFlag(e.target.value)}
+                      placeholder="e.g. 🇺🇬"
+                      className="portal-input"
+                      style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="portal-btn-save hover-lift"
+                    style={{ fontSize: '0.75rem', padding: '8px 12px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <PlusCircle size={12} />
+                    <span>Create Country</span>
+                  </button>
+                </form>
               </div>
 
               {/* Right Column: Specifications Form */}
               <form onSubmit={handleSaveCountrySpecs} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.6fr', gap: '20px' }}>
                   <div>
                     <label className="portal-input-label">Motto / Tagline</label>
                     <input
@@ -1300,6 +1592,18 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                       onChange={(e) => setAdminCountryForm({ ...adminCountryForm, accent: e.target.value })}
                       required
                       placeholder="e.g. #D27D2D or #1A3E26"
+                      className="portal-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="portal-input-label">Flag Emoji</label>
+                    <input
+                      type="text"
+                      value={adminCountryForm.flag}
+                      onChange={(e) => setAdminCountryForm({ ...adminCountryForm, flag: e.target.value })}
+                      required
+                      placeholder="e.g. 🇰🇪"
                       className="portal-input"
                     />
                   </div>
@@ -1393,6 +1697,76 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
 
               </form>
 
+            </div>
+          </div>
+        )}
+
+        {/* 5. TAB: ADMIN APPROVALS MANAGER */}
+        {activePortalTab === 'approvals' && currentUser.role === 'admin' && (
+          <div>
+            <div className="portal-section-header">
+              <div>
+                <p style={{ color: 'var(--accent-gold)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>System Management</p>
+                <h1 className="portal-section-title">Pending Landowner Approvals</h1>
+              </div>
+            </div>
+
+            <div className="portal-card">
+              {pendingUsers.length > 0 ? (
+                <div className="portal-table-container">
+                  <table className="portal-table">
+                    <thead>
+                      <tr>
+                        <th>Username</th>
+                        <th>User Role</th>
+                        <th>Account Label / Full Name</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingUsers.map(user => (
+                        <tr key={user.username}>
+                          <td style={{ fontWeight: 600, color: '#FFFFFF' }}>{user.username}</td>
+                          <td>
+                            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--accent-gold)' }}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td style={{ color: '#CBD5E1' }}>{user.label || user.username}</td>
+                          <td>
+                            <span style={{
+                              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                              color: '#EF4444',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.7rem',
+                              fontWeight: 600
+                            }}>
+                              Awaiting Approval
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              onClick={() => handleApproveUser(user.username)}
+                              className="portal-btn-save hover-lift"
+                              style={{ padding: '6px 14px', fontSize: '0.75rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <CheckCircle size={12} />
+                              <span>Approve & Activate</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '60px', color: '#64748B', fontStyle: 'italic' }}>
+                  No landowners are currently awaiting approval. All accounts are active!
+                </div>
+              )}
             </div>
           </div>
         )}

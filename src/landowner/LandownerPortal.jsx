@@ -18,7 +18,8 @@ import {
   HelpCircle,
   PlusCircle,
   Building,
-  Globe
+  Globe,
+  Trash2
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import './LandownerPortal.css';
@@ -120,6 +121,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
 
   // Admin data states
   const [pendingUsers, setPendingUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
   // Portal Navigation State
@@ -324,6 +326,8 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
       try {
         const pending = await apiService.getPendingUsers(currentUser);
         setPendingUsers(pending);
+        const usersList = await apiService.getUsers(currentUser);
+        setAllUsers(usersList);
         const notifs = await apiService.getNotifications(currentUser);
         setNotifications(notifs);
       } catch (err) {
@@ -346,6 +350,65 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
     } catch (err) {
       console.error("Approve failed", err);
       alert("Failed to approve user");
+    }
+  };
+
+  // Handle Owner Suspension Toggle (Admin Only)
+  const handleToggleSuspendUser = async (usernameToSuspend) => {
+    try {
+      await apiService.toggleSuspendUser(usernameToSuspend, currentUser);
+      alert(`Suspension status updated for user: ${usernameToSuspend}`);
+      fetchAdminData(); // Refresh directory lists
+    } catch (err) {
+      console.error("Failed to toggle user suspension", err);
+      alert("Failed to toggle account suspension.");
+    }
+  };
+
+  // Handle Owner Account Deletion (Admin Only)
+  const handleDeleteUser = async (usernameToDelete) => {
+    const confirmDelete = window.confirm(`WARNING: Are you sure you want to permanently delete landowner "${usernameToDelete}"? All their published land plots will also be removed.`);
+    if (!confirmDelete) return;
+
+    try {
+      await apiService.deleteUser(usernameToDelete, currentUser);
+      alert(`User ${usernameToDelete} has been successfully deleted.`);
+      
+      // Update local state catalog to remove their plots
+      const freshCountries = await apiService.getCountries();
+      if (Array.isArray(freshCountries)) {
+        setCountriesData(freshCountries);
+      }
+      fetchAdminData(); // Refresh directory lists
+    } catch (err) {
+      console.error("Failed to delete user", err);
+      alert("Failed to delete user account.");
+    }
+  };
+
+  // Toggle Country Visibility (Admin Only)
+  const handleToggleCountryVisibility = async (countryId) => {
+    try {
+      const res = await apiService.toggleCountryVisibility(countryId, currentUser);
+      alert(`Country visibility updated to: ${res.isVisible ? "VISIBLE" : "HIDDEN"}`);
+      const freshCountries = await apiService.getCountries();
+      if (Array.isArray(freshCountries)) setCountriesData(freshCountries);
+    } catch (err) {
+      console.error("Failed to toggle country visibility", err);
+      alert("Failed to toggle visibility status.");
+    }
+  };
+
+  // Toggle Plot Visibility (Admin Only)
+  const handleTogglePlotVisibility = async (plotId) => {
+    try {
+      const res = await apiService.togglePlotVisibility(plotId, currentUser);
+      alert(`Plot visibility updated to: ${res.isVisible ? "VISIBLE" : "HIDDEN"}`);
+      const freshCountries = await apiService.getCountries();
+      if (Array.isArray(freshCountries)) setCountriesData(freshCountries);
+    } catch (err) {
+      console.error("Failed to toggle plot visibility", err);
+      alert("Failed to toggle visibility status.");
     }
   };
 
@@ -1305,6 +1368,34 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                           Delete Listing
                         </button>
                       )}
+
+                      {customizerMode === 'edit' && filteredPlotsList.length > 0 && currentUser.role === 'admin' && (
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePlotVisibility(selectedPlotId)}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: '1px solid var(--accent-gold)',
+                            color: 'var(--accent-gold)',
+                            borderRadius: '4px',
+                            padding: '8px 16px',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(210,125,45,0.1)'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          {(() => {
+                            const currentPlotObj = filteredPlotsList.find(p => p.id === selectedPlotId);
+                            return currentPlotObj?.isVisible ? 'Hide Plot from Users' : 'Unhide / Make Public';
+                          })()}
+                        </button>
+                      )}
                     </div>
 
                     {saveSuccess && (
@@ -1582,6 +1673,49 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                   ))}
                 </select>
 
+                {(() => {
+                  const currentAdminCountry = (countriesData || []).find(c => c.id === (selectedAdminCountryId || (countriesData[0]?.id)));
+                  if (!currentAdminCountry) return null;
+                  return (
+                    <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Public Status:</span>
+                        <span style={{
+                          backgroundColor: currentAdminCountry.isVisible ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                          color: currentAdminCountry.isVisible ? '#10B981' : '#EF4444',
+                          border: `1px solid ${currentAdminCountry.isVisible ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.68rem',
+                          fontWeight: 600
+                        }}>
+                          {currentAdminCountry.isVisible ? 'VISIBLE' : 'HIDDEN'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleToggleCountryVisibility(currentAdminCountry.id)}
+                        type="button"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid var(--accent)',
+                          backgroundColor: 'transparent',
+                          color: '#FFFFFF',
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--accent)'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        {currentAdminCountry.isVisible ? 'Hide Country from Users' : 'Unhide / Make Public'}
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 <div style={{ backgroundColor: 'rgba(210,125,45,0.06)', border: '1px solid rgba(210,125,45,0.15)', borderRadius: '6px', padding: '15px' }}>
                   <p style={{ fontSize: '0.75rem', color: '#CBD5E1', lineHeight: 1.4, margin: 0 }}>
                     <strong>Admin Note:</strong> Changing this info updates what is written on the top public explore page and the drone video tour. Landowners cannot edit these fields.
@@ -1770,11 +1904,16 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
             <div className="portal-section-header">
               <div>
                 <p style={{ color: 'var(--accent-gold)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>System Management</p>
-                <h1 className="portal-section-title">Pending Landowner Approvals</h1>
+                <h1 className="portal-section-title">User Accounts Directory & Approvals</h1>
               </div>
             </div>
 
-            <div className="portal-card">
+            {/* SECTION 1: PENDING REGISTRATIONS */}
+            <div className="portal-card" style={{ marginBottom: '30px' }}>
+              <h2 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--accent-gold)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Clock size={16} />
+                <span>Pending Landowner Approvals ({pendingUsers.length})</span>
+              </h2>
               {pendingUsers.length > 0 ? (
                 <div className="portal-table-container">
                   <table className="portal-table">
@@ -1782,7 +1921,7 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                       <tr>
                         <th>Username</th>
                         <th>User Role</th>
-                        <th>Account Label / Full Name</th>
+                        <th>Account Label</th>
                         <th>Status</th>
                         <th style={{ textAlign: 'right' }}>Actions</th>
                       </tr>
@@ -1826,8 +1965,142 @@ export default function LandownerPortal({ countriesData, setCountriesData, onNav
                   </table>
                 </div>
               ) : (
-                <div style={{ textAlign: 'center', padding: '60px', color: '#64748B', fontStyle: 'italic' }}>
-                  No landowners are currently awaiting approval. All accounts are active!
+                <div style={{ padding: '20px', color: '#64748B', fontStyle: 'italic', fontSize: '0.82rem' }}>
+                  No landowners are currently awaiting approval.
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 2: ALL REGISTERED USERS DIRECTORY */}
+            <div className="portal-card">
+              <h2 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--accent-gold)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Users size={16} />
+                <span>Registered Landowners Directory ({allUsers.length})</span>
+              </h2>
+              {allUsers.length > 0 ? (
+                <div className="portal-table-container">
+                  <table className="portal-table">
+                    <thead>
+                      <tr>
+                        <th>Username</th>
+                        <th>User Role</th>
+                        <th>Status</th>
+                        <th>Suspension</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allUsers.map(user => (
+                        <tr key={user.username}>
+                          <td style={{ fontWeight: 600, color: '#FFFFFF' }}>{user.username}</td>
+                          <td>
+                            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--accent-gold)' }}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td>
+                            {user.is_approved ? (
+                              <span style={{
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                color: '#10B981',
+                                border: '1px solid rgba(16, 185, 129, 0.25)',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 600
+                              }}>
+                                Active Approved
+                              </span>
+                            ) : (
+                              <span style={{
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                color: '#EF4444',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 600
+                              }}>
+                                Pending Approval
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {user.is_suspended ? (
+                              <span style={{
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                color: '#EF4444',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 600
+                              }}>
+                                Suspended
+                              </span>
+                            ) : (
+                              <span style={{
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                color: '#10B981',
+                                border: '1px solid rgba(16, 185, 129, 0.25)',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 600
+                              }}>
+                                Good Standing
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={() => handleToggleSuspendUser(user.username)}
+                              className="portal-btn-save hover-lift"
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '0.75rem',
+                                width: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: user.is_suspended ? 'var(--accent)' : 'rgba(210,125,45,0.1)',
+                                border: '1px solid var(--accent)'
+                              }}
+                            >
+                              <span>{user.is_suspended ? 'Unsuspend' : 'Suspend'}</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteUser(user.username)}
+                              className="hover-lift"
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '0.75rem',
+                                width: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#EF4444',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.25)'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)'}
+                            >
+                              <Trash2 size={12} />
+                              <span>Delete</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ padding: '20px', color: '#64748B', fontStyle: 'italic', fontSize: '0.82rem' }}>
+                  No landowners registered in the directory yet.
                 </div>
               )}
             </div>

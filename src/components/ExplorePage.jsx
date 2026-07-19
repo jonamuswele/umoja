@@ -187,7 +187,7 @@ function InlineVideoPlayer({ videoUrl, placeholderImg, accent }) {
 
 // Snapping Country Showcase Card detailing the culture, lifestyle, and build guidance
 function CountryShowcaseSection({ country, style, showcaseRef }) {
-  const flag = FLAGS[country.id] || "🌍";
+  const flag = country.flag || FLAGS[country.id] || "🌍";
   const cult = country.cultureInfo || {
     whyLive: "A rich mixture of high-yield economic potential, scenic natural wonders, and secure land ownership options.",
     bestBuild: "Eco-friendly Rammed Earth villas or solar-passive brick cottages utilizing sustainable local resources.",
@@ -542,7 +542,7 @@ function ScrollLinkedTerrain({ scroll, mouse }) {
 
 // Snapping Country Section Component (Description + Video Player next to it)
 function CountrySnapSection({ country, style, onSelectCountry }) {
-  const flag = FLAGS[country.id] || "🌍";
+  const flag = country.flag || FLAGS[country.id] || "🌍";
 
   return (
     <div 
@@ -1327,7 +1327,7 @@ ${inquiryForm.fullName}`;
                         e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
                       }}
                     >
-                      <span style={{ fontSize: '1.1rem' }}>{FLAGS[c.id] || "🌍"}</span>
+                      <span style={{ fontSize: '1.1rem' }}>{c.flag || FLAGS[c.id] || "🌍"}</span>
                       <span>{c.name}</span>
                     </button>
                   ))}

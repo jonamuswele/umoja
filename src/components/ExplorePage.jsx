@@ -977,7 +977,7 @@ ${inquiryForm.fullName}`;
   const getScrollIndexInfo = () => {
     const viewport = window.innerHeight;
     const rawProgress = scrollPosition / viewport;
-    const limit = selectedCountryId ? plots.length : 5;
+    const limit = selectedCountryId ? (plots.length > 0 ? plots.length : 1) : 5;
     return {
       progress: rawProgress,
       activeIndex: Math.min(Math.max(0, Math.round(rawProgress)), limit)
@@ -1043,7 +1043,7 @@ ${inquiryForm.fullName}`;
     }
 
     // Footer Safe Filter: only fade out the last element when scrolling PAST its snapped position to the footer
-    const limit = selectedCountryId ? plots.length : 5;
+    const limit = selectedCountryId ? (plots.length > 0 ? plots.length : 1) : 5;
     const viewportHeight = window.innerHeight || 800;
     const targetScrollPos = limit * viewportHeight;
 
@@ -1391,9 +1391,13 @@ ${inquiryForm.fullName}`;
           <div style={{ width: '100%', position: 'relative', zIndex: 1 }}>
             {/* Country Showcase target */}
             <div id="showcase-sec" className="plot-snap-target deck-section" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
-            {plots.map((p) => p && (
-              <div key={p.id} id={`${p.id}-sec`} className="plot-snap-target deck-section" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
-            ))}
+            {plots.length > 0 ? (
+              plots.map((p) => p && (
+                <div key={p.id} id={`${p.id}-sec`} className="plot-snap-target deck-section" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
+              ))
+            ) : (
+              <div id="noplots-sec" className="plot-snap-target deck-section" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
+            )}
             {/* Footer snap placeholder target for plots */}
             <div id="footer-spacer-plots" className="plot-snap-target deck-section" style={{ minHeight: '100vh', opacity: 0, pointerEvents: 'none' }} />
           </div>
@@ -1449,20 +1453,20 @@ ${inquiryForm.fullName}`;
           </div>
 
           {/* Plot snapping section list - STATIONARY FADING */}
-          {plots.length > 0 ? (
-            <>
-              {/* Country Showcase Card at index 0 */}
-              <CountryShowcaseSection 
-                country={selectedCountry}
-                style={{
-                  ...getSectionStyle(0),
-                  pointerEvents: (scrollPosition <= 10 && getSectionStyle(0).opacity > 0.5) ? 'auto' : 'none'
-                }}
-                showcaseRef={showcaseRef}
-              />
-              
-              {/* Plots starting at index 1 */}
-              {plots.map((p, index) => p && (
+          <>
+            {/* Country Showcase Card at index 0 (Always rendered) */}
+            <CountryShowcaseSection 
+              country={selectedCountry}
+              style={{
+                ...getSectionStyle(0),
+                pointerEvents: (scrollPosition <= 10 && getSectionStyle(0).opacity > 0.5) ? 'auto' : 'none'
+              }}
+              showcaseRef={showcaseRef}
+            />
+            
+            {plots.length > 0 ? (
+              /* Plots starting at index 1 */
+              plots.map((p, index) => p && (
                 <PlotSnapSection
                   key={p.id}
                   plot={p}
@@ -1470,36 +1474,63 @@ ${inquiryForm.fullName}`;
                   style={getSectionStyle(index + 1)}
                   onSelectPlot={handleOpenInquiryModal}
                 />
-              ))}
-            </>
-          ) : (
-            <div 
-              style={{ 
-                position: 'fixed',
-                top: '125px',
-                left: 0,
-                right: 0,
-                bottom: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#F2F6F3',
-                color: '#1A3E26',
-                zIndex: 5
-              }}
-            >
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontStyle: 'italic', fontSize: '1.1rem' }}>No vetted plots listed in this country yet.</p>
-                <button
-                  onClick={handleBackToCountries}
-                  className="btn-primary hover-lift"
-                  style={{ marginTop: '20px', padding: '10px 20px' }}
-                >
-                  Return to Countries List
-                </button>
+              ))
+            ) : (
+              /* No Plots Available slide at index 1 */
+              <div 
+                style={{
+                  ...getSectionStyle(1),
+                  position: 'fixed',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'linear-gradient(135deg, #070C09 0%, #1A3E26 100%)',
+                  color: '#FFFFFF',
+                  zIndex: 2,
+                  textAlign: 'center',
+                  padding: '0 20px'
+                }}
+              >
+                <div style={{ 
+                  maxWidth: '550px', 
+                  backgroundColor: 'rgba(255,255,255,0.03)', 
+                  border: '1px solid rgba(210,125,45,0.2)', 
+                  padding: '40px', 
+                  borderRadius: '12px', 
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
+                }}>
+                  <Sparkles size={40} style={{ color: 'var(--accent-gold)', marginBottom: '20px' }} />
+                  <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.8rem', color: '#FFFFFF', marginBottom: '15px' }}>
+                    No Plots Available
+                  </h3>
+                  <p style={{ fontSize: '0.92rem', color: '#CBD5E1', lineHeight: 1.6, fontWeight: 300, marginBottom: '25px' }}>
+                    We are currently surveying premium, certified plots in {selectedCountry?.name}. Check back shortly or contact our escrow advisors to express your custom interest.
+                  </p>
+                  <button
+                    onClick={handleBackToCountries}
+                    className="hover-lift"
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--accent-gold)',
+                      color: 'var(--accent-gold)',
+                      padding: '12px 30px',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-sans)',
+                      fontWeight: 600,
+                      fontSize: '0.8rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Explore Other Regions
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </>
         </>
       )}
 

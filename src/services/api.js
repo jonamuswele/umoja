@@ -457,5 +457,60 @@ export const apiService = {
       console.error("Local catalog sync failed in addCountry", e);
     }
     return newCountry;
+  },
+
+  // 15. Get All Users (Admin Only)
+  getUsers: async (userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+        method: "GET",
+        headers: getHeaders(userProfile)
+      });
+      if (!response.ok) throw new Error("Failed to fetch users list");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline or error loading users", error);
+      return [];
+    }
+  },
+
+  // 16. Toggle Suspension (Admin Only)
+  toggleSuspendUser: async (username, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/users/${username}/suspend`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to toggle user suspension");
+    return await response.json();
+  },
+
+  // 17. Delete User Account (Admin Only)
+  deleteUser: async (username, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/users/${username}`, {
+      method: "DELETE",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to delete user");
+    return await response.json();
+  },
+
+  // 18. Toggle Country Visibility (Admin Only)
+  toggleCountryVisibility: async (countryId, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/countries/${countryId}/visibility`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to toggle country visibility");
+    return await response.json();
+  },
+
+  // 19. Toggle Plot Visibility (Admin Only)
+  togglePlotVisibility: async (plotId, userProfile) => {
+    const response = await fetch(`${API_BASE_URL}/api/admin/plots/${plotId}/visibility`, {
+      method: "POST",
+      headers: getHeaders(userProfile)
+    });
+    if (!response.ok) throw new Error("Failed to toggle plot visibility");
+    return await response.json();
   }
 };

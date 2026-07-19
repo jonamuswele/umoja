@@ -159,6 +159,48 @@ export const apiService = {
     }
   },
 
+  // 4b. Update Country Specifications (Admin Only)
+  updateCountry: async (countryId, countryData, userProfile) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/countries/${countryId}`, {
+        method: "PUT",
+        headers: getHeaders(userProfile),
+        body: JSON.stringify(countryData)
+      });
+      if (!response.ok) throw new Error("Country update failed");
+      return await response.json();
+    } catch (error) {
+      console.warn("Backend offline, saving country specifications locally.", error);
+      
+      let local = [];
+      try {
+        const localRaw = localStorage.getItem('umoja_countries_data');
+        if (localRaw) local = JSON.parse(localRaw);
+      } catch (e) {
+        console.error("Local catalog parse failed in updateCountry", e);
+      }
+      if (!Array.isArray(local)) local = [];
+
+      const updated = local.map(c => {
+        if (c.id === countryId) {
+          return {
+            ...c,
+            motto: countryData.motto,
+            desc: countryData.desc,
+            videoUrl: countryData.videoUrl,
+            accent: countryData.accent,
+            highlights: countryData.highlights,
+            potentialNeighborhoods: countryData.potentialNeighborhoods,
+            cultureInfo: countryData.cultureInfo
+          };
+        }
+        return c;
+      });
+      localStorage.setItem('umoja_countries_data', JSON.stringify(updated));
+      return { id: countryId, ...countryData };
+    }
+  },
+
   // 5. Increment View Count
   trackView: async (plotId) => {
     try {

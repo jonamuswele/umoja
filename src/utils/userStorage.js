@@ -1,3 +1,4 @@
+const notifyServicesUpdated = () => { if (typeof window !== 'undefined') window.dispatchEvent(new Event('umoja_services_updated')); };
 import { SERVICES } from '../data/servicesData';
 import { apiService } from '../services/api';
 
@@ -1579,6 +1580,7 @@ export const getStoredServices = () => {
         if (Array.isArray(remote) && remote.length > 0) {
           const enriched = remote.map(enrichService);
           localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(enriched));
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('umoja_services_updated'));
         }
       }).catch(() => {});
     }
@@ -1606,7 +1608,7 @@ export const updateStoredService = (serviceId, updatedFields, adminName = 'Victo
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated)); notifyServicesUpdated();
     addAdminLog(`Updated service/product "${updatedTitle}" (${serviceId})`, adminName);
 
     // Sync to backend Hono API
@@ -1642,7 +1644,7 @@ export const updateServiceSubscription = (serviceId, planId, updatedPlan, adminN
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated)); notifyServicesUpdated();
     addAdminLog(`Updated subscription plan "${updatedPlan.name || planId}" in "${serviceTitle}"`, adminName);
 
     if (fullTargetService) {
@@ -1682,7 +1684,7 @@ export const addServiceSubscription = (serviceId, newPlan, adminName = 'Victoria
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated)); notifyServicesUpdated();
     addAdminLog(`Added new subscription plan "${planWithId.name}" to "${serviceTitle}"`, adminName);
 
     if (fullTargetService) {
@@ -1717,7 +1719,7 @@ export const deleteServiceSubscription = (serviceId, planId, adminName = 'Victor
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated)); notifyServicesUpdated();
     addAdminLog(`Deleted subscription plan "${deletedName}" from "${serviceTitle}"`, adminName);
 
     if (fullTargetService) {
@@ -1754,7 +1756,7 @@ export const toggleServiceSubscription = (serviceId, planId, adminName = 'Victor
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated)); notifyServicesUpdated();
     addAdminLog(`${nextState ? 'Activated' : 'Paused'} subscription "${planName}" in "${serviceTitle}"`, adminName);
 
     if (fullTargetService) {
@@ -1783,7 +1785,7 @@ export const toggleServiceStatus = (serviceId, adminName = 'Victoria Adeleke') =
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated)); notifyServicesUpdated();
     addAdminLog(`${nextStatus === 'disabled' ? 'Disabled' : 'Enabled'} service "${serviceTitle}" (${serviceId})`, adminName);
 
     // Sync to backend Hono API

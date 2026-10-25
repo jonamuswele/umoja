@@ -24,6 +24,7 @@ import SettingsPage from './components/SettingsPage';
 import AdminPortalPage from './components/AdminPortalPage';
 import LoginPage from './components/LoginPage';
 import { SERVICES } from './data/servicesData';
+import { apiService } from './services/api';
 import { getUser, saveUser, getNotifications, getMessages, getUserListings, getStoredServices, DEMO_USER, DEMO_ADMIN } from './utils/userStorage';
 
 export default function App() {
@@ -106,6 +107,43 @@ export default function App() {
   };
 
   const [badgeCount, setBadgeCount] = useState(calculateUnreadCount);
+
+  // Live synchronization with backend D1 database
+  useEffect(() => {
+    // 1. Fetch live services
+    apiService.getServices().then(remoteServices => {
+      if (Array.isArray(remoteServices) && remoteServices.length > 0) {
+        localStorage.setItem('umoja_services', JSON.stringify(remoteServices));
+        setStoredServices(remoteServices);
+      }
+    }).catch(() => {});
+
+    // 2. Fetch live listings
+    apiService.getListings(user).then(remoteListings => {
+      if (Array.isArray(remoteListings) && remoteListings.length > 0) {
+        localStorage.setItem('umoja_user_listings', JSON.stringify(remoteListings));
+        setPendingListingsCount(remoteListings.filter(l => (l.status || '').toLowerCase() === 'pending').length);
+      }
+    }).catch(() => {});
+
+    // 3. Fetch live threads
+    apiService.getThreads(user).then(remoteThreads => {
+      if (Array.isArray(remoteThreads) && remoteThreads.length > 0) {
+        localStorage.setItem('umoja_messages', JSON.stringify(remoteThreads));
+        setBadgeCount(calculateUnreadCount());
+      }
+    }).catch(() => {});
+
+    const handleServicesUpdated = () => {
+      setStoredServices(getStoredServices());
+    };
+    window.addEventListener('umoja_services_updated', handleServicesUpdated);
+    window.addEventListener('umoja_listings_updated', refreshBadgeCount);
+    return () => {
+      window.removeEventListener('umoja_services_updated', handleServicesUpdated);
+      window.removeEventListener('umoja_listings_updated', refreshBadgeCount);
+    };
+  }, [user]);
 
   const refreshBadgeCount = () => {
     setBadgeCount(calculateUnreadCount());
@@ -635,6 +673,7 @@ export default function App() {
         {/* Building Material -> Dedicated Marketplace Page */}
         {activeTab === 'explore' && selectedServiceId === 'building-material' && (
           <BuildingMaterialMarketplace
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -642,6 +681,7 @@ export default function App() {
         {/* Property & Estate Management -> Dedicated Interactive Configurator */}
         {activeTab === 'explore' && (selectedServiceId === 'property-management' || selectedServiceId === 'estate-management') && (
           <PropertyEstateManagement
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -649,6 +689,7 @@ export default function App() {
         {/* Home Services Marketplace -> Dedicated 12-Trades On-Demand Suite */}
         {activeTab === 'explore' && selectedServiceId === 'home-services' && (
           <HomeServicesMarketplace
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -656,6 +697,7 @@ export default function App() {
         {/* Smart Home Integration -> Dedicated Customization & Survey Suite */}
         {activeTab === 'explore' && selectedServiceId === 'smart-home' && (
           <SmartHomeIntegration
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -663,6 +705,7 @@ export default function App() {
         {/* Real Estate Financing -> Payment Plans & Installment Tracking */}
         {activeTab === 'explore' && selectedServiceId === 'financing' && (
           <RealEstateFinancing
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -670,6 +713,7 @@ export default function App() {
         {/* Legal Documentation -> Documents by Purpose, Lawyer Vetting & Due Diligence */}
         {activeTab === 'explore' && selectedServiceId === 'legal-documentation' && (
           <LegalDocumentationHub
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -677,6 +721,7 @@ export default function App() {
         {/* Land Verification -> Survey Plan Upload, Title Verification, Registry Checks, Boundary Mapping & Encroachment Alerts */}
         {activeTab === 'explore' && selectedServiceId === 'land-verification' && (
           <LandVerificationHub
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -684,6 +729,7 @@ export default function App() {
         {/* Interior Design -> Room Visualization, Furniture Shopping, AI Redesign, Designer Booking & Budget Planner */}
         {activeTab === 'explore' && (selectedServiceId === 'interior-finishing' || selectedServiceId === 'interior-design') && (
           <InteriorDesignHub
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -691,6 +737,7 @@ export default function App() {
         {/* Moving & Relocation -> Truck Booking, Packing Services, Storage Units, Relocation Assistance, Move Checklist, Utility Transfer */}
         {activeTab === 'explore' && (selectedServiceId === 'moving-services' || selectedServiceId === 'relocation') && (
           <MovingRelocationHub
+            customService={activeService}
             onBackToHub={() => handleNavigate('explore', null)}
           />
         )}
@@ -700,12 +747,14 @@ export default function App() {
           activeService?.kind === 'service' ? (
             <ServiceBookingPage
               service={activeService}
+              customService={activeService}
               onBackToHub={() => handleNavigate('explore', null)}
             />
           ) : (
             <ServiceShowcasePage
-              service={activeService || SERVICES[0]}
-              allServices={SERVICES}
+              service={activeService || storedServices[0] || SERVICES[0]}
+              customService={activeService}
+              allServices={storedServices}
               onBackToHub={() => handleNavigate('explore', null)}
               onSelectService={(serviceId) => handleNavigate('explore', serviceId)}
             />
